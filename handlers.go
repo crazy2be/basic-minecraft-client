@@ -71,6 +71,7 @@ func HandleHealth(c net.Conn) {
 }
 
 func HandleRespawn(c net.Conn) {
+	SendRespawn(c)
 	log2.Println("Received Respawn packet")
 }
 
@@ -87,7 +88,7 @@ func HandlePlayerPositionAndLook(c net.Conn) {
 		onGround = true
 	}
 	SendPlayerPositionAndLook(c, x, stance, y, z, yaw, pitch, onGroundraw)
-	UpdatePlayerPos(&PlayerPos{x, y, stance, z, onGround})
+	UpdatePlayerPos(&PlayerCoords{WorldCoords{x, y, z}, stance, onGround})
 	UpdatePlayerLook(&PlayerLook{yaw, pitch, onGround})
 	log4.Println("Player Position & Look Packet", x, y, stance, z, yaw, pitch, onGround)
 }
@@ -170,7 +171,7 @@ func HandleEntityVelocity(c net.Conn) {
 	vx, _ := ReadShort(c)
 	vy, _ := ReadShort(c)
 	vz, _ := ReadShort(c)
-	log9.Println("Entity Velocity:", eid, vx, vy, vz)
+	log8.Println("Entity Velocity:", eid, vx, vy, vz)
 }
 
 func HandleDestroyEntity(c net.Conn) {
@@ -188,7 +189,7 @@ func HandleEntityRelativeMove(c net.Conn) {
 	dx, _ := ReadByte(c)
 	dy, _ := ReadByte(c)
 	dz, _ := ReadByte(c)
-	log9.Println("Entity Relative Move:", eid, dx, dy, dz)
+	log8.Println("Entity Relative Move:", eid, dx, dy, dz)
 }
 
 func HandleEntityLook(c net.Conn) {
@@ -205,7 +206,7 @@ func HandleEntityLookAndRelativeMove(c net.Conn) {
 	dz, _ := ReadByte(c)
 	yaw, _ := ReadByte(c)
 	pitch, _ := ReadByte(c)
-	log9.Println("Entity Look And Relative Move:", eid, dx, dy, dz, yaw, pitch)
+	log8.Println("Entity Look And Relative Move:", eid, dx, dy, dz, yaw, pitch)
 }
 
 func HandleEntityTeleport(c net.Conn) {
@@ -283,7 +284,7 @@ func HandleChunk(c net.Conn) {
 		blocks[i].Skylight = skylight >> 4
 		blocks[i+1].Skylight = skylight & 0xF
 	}
-	UpdateChunk(&WorldPoint{x, y, z}, &Dimensions{sx, sy, sz}, blocks)
+	UpdateChunk(&BlockCoords{x, uint8(y), z}, &ChunkDimensions{sx, sy, sz}, blocks)
 	log9.Println("Chunk blocks:", blocks)
 }
 /*
@@ -326,7 +327,7 @@ func HandleBlockChange(c net.Conn) {
 	z, _ := ReadInt(c)
 	typ, _ := ReadByte(c)
 	data, _ := ReadByte(c)
-	UpdateBlock(&WorldPoint{x, int16(y), z}, typ, data)
+	UpdateBlock(&BlockCoords{x, y, z}, typ, data)
 	log7.Println("Block Change:", x, y, z, typ, data)
 }
 
@@ -337,6 +338,21 @@ func HandlePlayNoteBlock(c net.Conn) {
 	typ, _ := ReadByte(c)
 	pitch, _ := ReadByte(c)
 	log5.Println("Play Note Block:", x, y, z, typ, pitch)
+}
+
+func HandleExplosion(c net.Conn) {
+	x, _ := ReadDouble(c)
+	y, _ := ReadDouble(c)
+	z, _ := ReadDouble(c)
+	unknown, _ := ReadFloat(c)
+	count, _ := ReadInt(c)
+	for i := int32(0); i < count; i++ {
+		bx, _ := ReadByte(c)
+		by, _ := ReadByte(c)
+		bz, _ := ReadByte(c)
+		log7.Println("Explosion block affected:", bx, by, bz)
+	}
+	log5.Println("Explosion:", x, y, z, unknown, count)
 }
 
 func HandleSetSlot(c net.Conn) {

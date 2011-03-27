@@ -1,5 +1,9 @@
 package main
 
+import (
+	"fmt"
+)
+
 type Block struct {
 	Type byte
 	Metadata byte
@@ -7,25 +11,11 @@ type Block struct {
 	Skylight byte
 }
 
-type ChunkCoords struct {
-	X int32
-	Z int32
+func (b *Block) String() string {
+	return fmt.Sprintf("%s block (block id: %d). Additional: %d, %d, %d", b.NiceName(), b.Type, b.Metadata, b.Light, b.Skylight)
 }
 
-// Coordinates of a block within a chunk. X and Z are actually only nibbles or half-bytes.
-type LocalChunkCoords struct {
-	X byte
-	Y byte
-	Z byte
-}
-
-type WorldPoint struct {
-	X int32
-	Y int16
-	Z int32
-}
-
-type Dimensions struct {
+type ChunkDimensions struct {
 	X byte
 	Y byte
 	Z byte
@@ -36,7 +26,7 @@ type chunkData [16][128][16]Block
 var worldData = make(map[int32]map[int32]*chunkData)
 
 // Updates a bunch of blocks within a chunk
-func UpdateChunk(p *WorldPoint, d *Dimensions, data []Block) {
+func UpdateChunk(p *BlockCoords, d *ChunkDimensions, data []Block) {
 	cc := p.ChunkCoords()
 	log6.Println("data length:", len(data))
 	lcc := p.LocalChunkCoords()
@@ -52,7 +42,13 @@ func UpdateChunk(p *WorldPoint, d *Dimensions, data []Block) {
 			for y := int16(lcc.Y); y < int16(d.Y)+1+int16(lcc.Y); y++ {
 				//index := int32(y)+(z*(int32(d.Y)+1))+(x*(int32(d.Y)+1))+(int32(d.Z)+1)
 				//index := (x+1)*(z+1)*(int32(y)+1)
-				//log.Println("index:", index, x, y, z)
+				if x > 15 || y > 127 || z > 15 {
+					log0.Println("WARNING: MALFORMED CHUNK DATA!")
+					log0.Println("IMPENDING CRASH!")
+					log0.Println("index:", index, x, y, z)
+					log0.Println("Mitigiating crash by ignoring chunk data...")
+					return
+				}
 				chunk[x][y][z] = data[index]
 				index ++
 			}
@@ -60,9 +56,9 @@ func UpdateChunk(p *WorldPoint, d *Dimensions, data []Block) {
 	}
 }
 
-func UpdateBlock(p *WorldPoint, newtype, metadata byte) {
-	cc := p.ChunkCoords()
-	lcc := p.LocalChunkCoords()
+func UpdateBlock(bc *BlockCoords, newtype, metadata byte) {
+	cc := bc.ChunkCoords()
+	lcc := bc.LocalChunkCoords()
 	chunk := AllocChunk(cc)
 	block := &chunk[lcc.X][lcc.Y][lcc.Z]
 	block.Type = newtype
@@ -71,11 +67,21 @@ func UpdateBlock(p *WorldPoint, newtype, metadata byte) {
 
 func UpdateMultipleBlocks(cc *ChunkCoords, points []LocalChunkCoords, newtypes, newdatas []byte) {
 	for i := 0; i < len(points); i++ {
-		p := cc.WorldCoords(&points[i])
+		p := cc.BlockCoords(&points[i])
 		UpdateBlock(p, newtypes[i], newdatas[i])
 	}
 }
 
+func GetBlock(bc *BlockCoords) *Block {
+	cc := bc.ChunkCoords()
+	lcc := bc.LocalChunkCoords()
+	chunk := GetChunk(cc)
+	if chunk == nil {
+		return nil
+	}
+	block := chunk[lcc.X][lcc.Y][lcc.Z]
+	return &block
+}
 
 func ChunkExists(cc *ChunkCoords) bool {
 	_, ok := worldData[cc.X]
@@ -89,6 +95,13 @@ func ChunkExists(cc *ChunkCoords) bool {
 	return true
 }
 
+func GetChunk(cc *ChunkCoords) *chunkData {
+	if !ChunkExists(cc) {
+		return nil
+	}
+	return worldData[cc.X][cc.Z]
+}
+
 // Allocates a chunk if one does not exist at the specified ChunkCoords.
 func AllocChunk(cc *ChunkCoords) *chunkData {
 	if !ChunkExists(cc) {
@@ -96,22 +109,4 @@ func AllocChunk(cc *ChunkCoords) *chunkData {
 		worldData[cc.X][cc.Z] = new(chunkData)
 	}
 	return worldData[cc.X][cc.Z]
-}
-
-// Gets the coordinates of the chunk that the point (in world coords) lives within
-func (p *WorldPoint) ChunkCoords() *ChunkCoords {
-	// Is Y always 0?
-	return &ChunkCoords{p.X >> 4, p.Z >> 4}
-}
-
-// Gets the local coordinates (with the chunk) where the point (in world coords) is.
-func (p *WorldPoint) LocalChunkCoords() *LocalChunkCoords {
-	return &LocalChunkCoords{byte(p.X & 15), byte(p.Y & 127), byte(p.Z & 15)}
-}
-
-func (cc *ChunkCoords) WorldCoords(lcc *LocalChunkCoords) *WorldPoint {
-	wx := cc.X << 4 | int32(lcc.X)
-	wy := int16(lcc.Y)
-	wz := cc.Z << 4 | int32(lcc.Z)
-	return &WorldPoint{wx, wy, wz}
 }

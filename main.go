@@ -36,7 +36,7 @@ func NextPacket(c net.Conn) {
 			HandleUseEntity(c)
 		case 8:
 			HandleHealth(c)
-		case 9:
+		case 0x09:
 			HandleRespawn(c)
 		case 0x0D:
 			HandlePlayerPositionAndLook(c)
@@ -84,6 +84,8 @@ func NextPacket(c net.Conn) {
 			HandleBlockChange(c)
 		case 0x36:
 			HandlePlayNoteBlock(c)
+		case 0x3C:
+			HandleExplosion(c)
 		case 0x67:
 			HandleSetSlot(c)
 		case 0x68:
@@ -107,6 +109,26 @@ func KeepAlive(c net.Conn) {
 	}
 }
 
+// TODO: Hackish, should be in coords and provide a mechanism to subtract two coord sets.
+func GetPlayerOffset(cmd string) *PlayerCoords {
+	dir := ""
+	fmt.Scan(&dir)
+	amount := 0.0
+	fmt.Scan(&amount)
+	pp := GetPlayerPos()
+	switch (dir) {
+		case "x":
+			pp.X += amount
+		case "y":
+			pp.Y += amount
+		case "z":
+			pp.Z += amount
+		default:
+			fmt.Printf("Syntax: %s <dir> <amount>\nWhere %s is one of [x, y, z], and amount is a floating point number, relative to the current player position.\n", cmd, cmd)
+	}
+	return pp
+}
+
 func HandleCommands(c net.Conn) {
 	for {
 		cmd := ""
@@ -122,22 +144,47 @@ func HandleCommands(c net.Conn) {
 				case "pos":
 					fmt.Println("Player position:", GetPlayerPos())
 				case "move":
-					dir := ""
-					fmt.Scan(&dir)
-					amount := 0.0
-					fmt.Scan(&amount)
-					pp := GetPlayerPos()
-					switch (dir) {
-						case "x":
-							pp.X += amount
-						case "y":
-							pp.Y += amount
-						case "z":
-							pp.Z += amount
-						default:
-							fmt.Println("Second argument should be 'x', 'y', or 'z', followed by the amount")
-					}
+					pp := GetPlayerOffset("move")
 					SetPlayerPos(c, pp)
+				case "look":
+					pp := GetPlayerOffset("look")
+					bc := pp.BlockCoords()
+					b := GetBlock(bc)
+					if b == nil {
+						fmt.Println("Block at", bc, pp, "not loaded!")
+						continue
+					}
+					fmt.Println("Block at", bc, ":", b)
+				case "dig":
+					pp := GetPlayerOffset("dig")
+					bc := pp.BlockCoords()
+					// Do we need to detect this?
+// 					face := uint8(0)
+// 					switch (dir) {
+// 						case "x":
+// 							if amount > 0 {
+// 								face = 5
+// 							} else {
+// 								face = 4
+// 							}
+// 						case "y":
+// 							if amount > 0 {
+// 								face = 1
+// 							} else {
+// 								face = 0
+// 							}
+// 						case "z":
+// 							if amount > 0 {
+// 								face = 3
+// 							} else {
+// 								face = 2
+// 							}
+// 					}
+					fmt.Println("Started digging block at", bc, pp)
+					SendPlayerDigging(c, bc, 0, 0)
+					// TODO: Figure out actual time requirements and use those based on block type. For now, this works.
+					time.Sleep(2*1000*1000*1000)
+					SendPlayerDigging(c, bc, 2, 0)
 				case "sleep":
 					amount := 0.0
 					fmt.Scan(&amount)
@@ -146,6 +193,8 @@ func HandleCommands(c net.Conn) {
 					message := ""
 					fmt.Scanf("%q", &message)
 					SendChat(c, message)
+				case "respawn":
+					SendRespawn(c)
 				default:
 					log.Println("Unrecognized command", cmd)
 			}
@@ -172,7 +221,7 @@ func login(c net.Conn) {
 	go func() {
 		HandleCommands(c)
 	}()
-	for i := 0; i < 100000; i++ {
+	for {
 		NextPacket(c)
 	}
 }
@@ -181,10 +230,13 @@ var userName *string
 
 func main() {
 	userName = flag.String("username", "test", "The username that this client should join with.")
+	serverIP := flag.String("serverip", "68.144.126.229:25565", "The server to join, including the port number.")
 	flag.Parse()
 	InitLogs()
-	c, err := net.Dial("tcp", "", "68.144.126.229:25565")
+	c, err := net.Dial("tcp", "", *serverIP)
 	//24.13.132.130:25565
+	//68.144.126.229:25565
+	//68.147.253.198:25565
 	if err != nil {
 		log.Fatal(err)
 	}

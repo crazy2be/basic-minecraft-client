@@ -1,0 +1,13 @@
+[
+{"name":"empty", "id":0},
+{"name":"stone", "id":1},
+{"name":"grass", "id":2},
+{"name":"dirt", "id":3},
+{"name":"cobblestone", "id":4},
+{"name":"bedrock", "id": 7},
+{"name":"stationary water", "id": 9},
+{"name":"sand", "id":12},
+{"name":"sandstone", "id":24},
+{"name":"obsidian", "id":49},
+{"name":"torch", "id":50}
+]

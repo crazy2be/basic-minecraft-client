@@ -9,7 +9,9 @@ main.go\
 data.go\
 chunks.go\
 loggers.go\
-player.go
+player.go\
+nicenames.go\
+coords.go
 
 
 include $(GOROOT)/src/Make.cmd
